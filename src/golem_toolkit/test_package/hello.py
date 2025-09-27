@@ -1,2 +1,2 @@
-"def hello():" 
-"    return 'Hello from test_package!'" 
+def hello(): 
+    return 'Hello from test_package!'

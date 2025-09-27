@@ -31,4 +31,4 @@ include = ["src/golem_toolkit", "README.md", "LICENSE", "tests"]
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = [{ include = "golem_toolkit", from = "src" }]
+packages = ["src/golem_toolkit"]
