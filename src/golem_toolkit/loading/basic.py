@@ -1,5 +1,7 @@
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+import xarray as xr
 
 def load_parameter(url, param_type, verbose=0):
     try:
@@ -38,3 +40,39 @@ def load_array(url, index_col=None, names=None, verbose=0, skiprows=0):
                 inf_rows = num.index[np.isinf(num[col])]
                 print(f"⚠️  Column {col!r} has infinities at rows: {list(inf_rows)}")
         return data
+    
+def remove_initial_offset(dataarray, t_cutoff=0, verbose=0):
+    t0 = dataarray.t.isel(t=0)
+    assert t_cutoff >= t0, "Cut-off time for the initial offset has to be higher than the starting time"
+    offset_mean = dataarray.sel(t=slice(t0, t_cutoff)).mean()
+
+    dataarray -= offset_mean
+
+    if verbose:
+        print(f"+++ {dataarray.name}: initial offset = {offset_mean.values:1.2e}")
+    if verbose > 1:
+        fig, ax = plt.subplots()
+        fig.suptitle("Offset removal")
+        dataarray.plot(ax=ax)
+        ymin, ymax = dataarray.data.min(), dataarray.data.max()
+        ax.vlines(t_cutoff, ymin, ymax, color='k')
+        plt.show()
+    return dataarray
+
+def smooth_numpyarray(array, box_pts):
+    box = np.ones(box_pts) / box_pts
+    y_smooth = np.convolve(array, box, mode='same')
+    return y_smooth
+
+def smoothen_dataarray(dataarray, moving_avg_size, verbose=0):
+    data_smooth = xr.apply_ufunc(
+        smooth_numpyarray,
+        dataarray.copy(),
+        kwargs={"box_pts": moving_avg_size},
+    )
+    data_smooth.attrs = dataarray.attrs
+
+    if verbose:
+        print(data_smooth)
+
+    return data_smooth

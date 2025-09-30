@@ -44,7 +44,7 @@ def load_DAS(shot_no, data_url, das_settings, n_channels, names=None, skiprows=0
         # # print(DC.sel(t=t_inf))
         return DAS
 
-def plot_DAS(DAS_dataset, DAS_name=None, figsize=None):
+def plot_DAS(DAS_dataset, DAS_name=None, figsize=None, filename=None):
     # Number of panels = number of data variables (exclude coords)
     try:
         n = len(DAS_dataset.data_vars)
@@ -87,6 +87,9 @@ def plot_DAS(DAS_dataset, DAS_name=None, figsize=None):
         # formatter = FuncFormatter(lambda x, pos: f"{x*1e3:.1f}")
         # axi.xaxis.set_major_formatter(formatter)
         # axi.set_xlabel("t [ms]")
+    
+    if filename:
+        plt.savefig(filename)
 
     plt.show()
 
@@ -156,13 +159,13 @@ class TEK64:
 
         return self.data
 
-    def plot(self):
+    def plot(self, **kwargs):
         try:
             data = getattr(self, "data")
         except Exception as e:
             print(f"The data has not been loaded yet! \nError: {e}")
 
-        plot_DAS(self.data, self.DAS_name)
+        plot_DAS(self.data, self.DAS_name, **kwargs)
         
         
 if __name__ == "__main__":
