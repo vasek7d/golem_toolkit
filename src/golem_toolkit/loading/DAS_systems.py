@@ -2,47 +2,233 @@ import numpy as np
 # import pandas as pd
 import xarray as xr
 import matplotlib.pyplot as plt
+from pathlib import Path
+import hashlib, json, tempfile, os, contextlib, re
 
 from golem_toolkit.loading import basic as load
 
-def load_DAS(shot_no, data_url, das_settings, n_channels, names=None, skiprows=0, time_units="s", verbose=0):
-    # data_url = f"http://golem.fjfi.cvut.cz/shotdir/{shot_no}/Devices/ITs/SignalLab-a/data.csv"
+# def load_DAS(shot_no, data_url, das_settings, n_channels, names=None, skiprows=0, time_units="s", verbose=0):
+#     # data_url = f"http://golem.fjfi.cvut.cz/shotdir/{shot_no}/Devices/ITs/SignalLab-a/data.csv"
+    
+    
+    
+#     if names is None:
+#         names = ["t"] + [f"CH{i}" for i in range(1, n_channels+1)]
 
+#     # print("names", names)
+#     pd_data = load.load_array(data_url, names=names,
+#                          index_col='t', verbose=verbose, skiprows=skiprows)
+    
+#     if pd_data is None:
+#         return None
+#     else:
+#         data = pd_data.to_xarray()
+    
+#         DAS = xr.Dataset()
+    
+#         for channel, settings in das_settings.items():
+#             DAS[settings['var_name']] = data.get(
+#                 channel)*settings['scaling_factor']
+#             DAS[settings['var_name']].attrs = settings['attrs']
+#         DAS.attrs = {"shot_no": shot_no}
+    
+#         if time_units == "s":
+#             factor = 1
+#         elif time_units == "ms":
+#             factor = 1e3
+#         else:
+#             raise ValueError("time_units has to be either 's' or 'ms")
+    
+#         DAS.coords["t"] = DAS.t * factor
+#         DAS.t.attrs["units"] = time_units
+    
+#         # # mask = np.isinf(DC['I'].values)
+#         # # t_inf = DC.t.values[mask]
+#         # # print(t_inf)
+#         # # print(DC.sel(t=t_inf))
+#         return DAS
+
+def _fingerprint_for_cache(key: dict) -> str:
+    """Stable short fingerprint for any JSON-serializable object."""
+    return hashlib.sha1(
+        json.dumps(key, sort_keys=True, default=str).encode()
+    ).hexdigest()[:10]
+
+def cache_file_for(
+    shot_no,
+    data_url,
+    das_settings,
+    n_channels,
+    names=None,
+    skiprows=0,
+    time_units="s",
+    cache_dir="DATA_CACHE",
+):
+    """Return the exact Path where this call would cache the dataset."""
+    if names is None:
+        names = ["t"] + [f"CH{i}" for i in range(1, n_channels+1)]
+    key = {
+        "shot_no": shot_no,
+        "url": data_url,
+        "settings": das_settings,
+        "n_channels": n_channels,
+        "names": names,
+        "skiprows": skiprows,
+        "time_units": time_units,
+        "version": 1,
+    }
+    fp = _fingerprint_for_cache(key)
+    return Path(cache_dir) / f"DAS_{shot_no}_{fp}.nc"
+
+
+def list_cache(cache_dir="DATA_CACHE", shot_no=None):
+    """
+    List cached .nc files. If shot_no is given, only list caches for that shot.
+    Returns a list of Paths sorted by modified time (newest first).
+    """
+    cdir = Path(cache_dir)
+    if not cdir.exists():
+        return []
+    pattern = f"DAS_{shot_no}_" if shot_no is not None else "DAS_"
+    files = [p for p in cdir.glob("*.nc") if p.name.startswith(pattern)]
+    return sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def clear_cache(cache_dir="DATA_CACHE", shot_no=None, keep_latest=False, verbose=1):
+    """
+    Delete cache files.
+      - If shot_no is None: delete all caches in cache_dir.
+      - If shot_no is set: delete only that shot's caches.
+      - If keep_latest=True: for each shot, keep the newest file and delete the rest.
+
+    Returns (deleted_paths: list[Path], kept_paths: list[Path])
+    """
+    cdir = Path(cache_dir)
+    if not cdir.exists():
+        return ([], [])
+
+    if shot_no is None:
+        # group by shot inferred from filename DAS_<shot>_<fp>.nc
+        groups = {}
+        for p in cdir.glob("DAS_*_*.nc"):
+            m = re.match(r"DAS_(.+?)_[0-9a-f]{10}\.nc$", p.name)
+            if not m:
+                continue
+            sh = m.group(1)
+            groups.setdefault(sh, []).append(p)
+    else:
+        groups = {str(shot_no): list_cache(cache_dir, shot_no=shot_no)}
+
+    deleted, kept = [], []
+    for sh, files in groups.items():
+        files_sorted = sorted(files, key=lambda p: p.stat().st_mtime, reverse=True)
+        if keep_latest and files_sorted:
+            kept.append(files_sorted[0])
+            to_delete = files_sorted[1:]
+        else:
+            to_delete = files_sorted
+
+        for p in to_delete:
+            try:
+                p.unlink()
+                deleted.append(p)
+                if verbose:
+                    print(f"[clear_cache] Deleted {p}")
+            except Exception as e:
+                if verbose:
+                    print(f"[clear_cache] Could not delete {p} ({e})")
+
+    if verbose and kept:
+        for p in kept:
+            print(f"[clear_cache] Kept latest for shot: {p}")
+
+    return (deleted, kept)
+
+def load_DAS(
+    shot_no,
+    data_url,
+    das_settings,
+    n_channels,
+    names=None,
+    skiprows=0,
+    time_units="s",
+    verbose=0,
+    *,
+    cache=False,
+    cache_dir="DATA_CACHE",
+    force_refresh=False,
+):
+    """Load DAS data into an xarray.Dataset with optional caching."""
+
+    # ---------- Cache setup ----------
     if names is None:
         names = ["t"] + [f"CH{i}" for i in range(1, n_channels+1)]
 
-    # print("names", names)
-    pd_data = load.load_array(data_url, names=names,
-                         index_col='t', verbose=verbose, skiprows=skiprows)
-    
+    if cache:
+        key = {
+            "shot_no": shot_no,
+            "url": data_url,
+            "settings": das_settings,
+            "n_channels": n_channels,
+            "names": names,
+            "skiprows": skiprows,
+            "time_units": time_units,
+            "version": 1,
+        }
+        fingerprint = _fingerprint_for_cache(key)
+        
+        cache_dir = Path(cache_dir)
+        cache_dir.mkdir(exist_ok=True)
+        cache_file = cache_dir / f"DAS_{shot_no}_{fingerprint}.nc"
+        if verbose > 1:
+            print(f"[load_DAS] cache_file = {cache_file}")
+
+    # ---------- Try cache ----------
+    if cache and cache_file.exists() and not force_refresh:
+        if verbose:
+            print(f"[load_DAS] Loading from cache {cache_file}")
+        try:
+            return xr.load_dataset(cache_file)
+        except Exception as e:
+            if verbose:
+                print(f"[load_DAS] Cache read failed ({e}); rebuilding...")
+
+    # ---------- Load fresh data ----------
+    pd_data = load.load_array(data_url, names=names, index_col="t", verbose=verbose, skiprows=skiprows)
     if pd_data is None:
         return None
-    else:
-        data = pd_data.to_xarray()
-    
-        DAS = xr.Dataset()
-    
-        for channel, settings in das_settings.items():
-            DAS[settings['var_name']] = data.get(
-                channel)*settings['scaling_factor']
-            DAS[settings['var_name']].attrs = settings['attrs']
-        DAS.attrs = {"shot_no": shot_no}
-    
-        if time_units == "s":
-            factor = 1
-        elif time_units == "ms":
-            factor = 1e3
-        else:
-            raise ValueError("time_units has to be either 's' or 'ms")
-    
-        DAS.coords["t"] = DAS.t * factor
-        DAS.t.attrs["units"] = time_units
-    
-        # # mask = np.isinf(DC['I'].values)
-        # # t_inf = DC.t.values[mask]
-        # # print(t_inf)
-        # # print(DC.sel(t=t_inf))
-        return DAS
+
+    data = pd_data.to_xarray()
+    DAS = xr.Dataset()
+
+    for channel, settings in das_settings.items():
+        DAS[settings["var_name"]] = data[channel] * settings["scaling_factor"]
+        DAS[settings["var_name"]].attrs = settings["attrs"]
+
+    DAS.attrs = {"shot_no": shot_no}
+
+    factor = 1 if time_units == "s" else 1e3
+    DAS = DAS.rename({"index": "t"}) if "index" in DAS.dims else DAS
+    DAS = DAS.assign_coords(t=DAS.t * factor)
+    DAS.t.attrs["units"] = time_units
+
+    # ---------- Save to cache ----------
+    if cache:
+        if verbose:
+            print(f"[load_DAS] Saving to cache {cache_file}")
+        fd, tmp_name = tempfile.mkstemp(suffix=".nc", dir=str(cache_dir))
+        os.close(fd)
+        tmp_path = Path(tmp_name)
+        try:
+            DAS.to_netcdf(tmp_path)
+            tmp_path.replace(cache_file)   # atomic replace
+        except Exception:
+            with contextlib.suppress(Exception):
+                print(f"[load_DAS] Saving to cache failed!")
+                tmp_path.unlink()
+            raise
+
+    return DAS
 
 def plot_DAS(DAS_dataset, DAS_name=None, figsize=None, filename=None):
     # Number of panels = number of data variables (exclude coords)
@@ -120,14 +306,14 @@ class REDPITAYA:
                              skiprows=self.skiprows,
                              **load_DAS_kwargs)
 
-        return self.data
+        # return self.data
 
-    def plot(self):
+    def plot(self, **kwargs):
         try:
             data = getattr(self, "data")
         except Exception as e:
             print(f"The data has not been loaded yet! Error: {e}")
-        plot_DAS(self.data, self.DAS_name)
+        plot_DAS(self.data, self.DAS_name, **kwargs)
 
 
 class TEK64:
@@ -156,8 +342,10 @@ class TEK64:
                              self.n_channels,
                              skiprows=self.skiprows,
                              **load_DAS_kwargs)
+        
+    
 
-        return self.data
+        # return self.data
 
     def plot(self, **kwargs):
         try:
