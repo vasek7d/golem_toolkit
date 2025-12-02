@@ -7,6 +7,13 @@ name = "golem-toolkit"
 description = "GOLEM toolkit."
 readme = "README.md"
 requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "matplotlib",
+    "xarray",
+    "scipy",
+]
 license = { file = "LICENSE" }
 authors = [{ name = "Václav Sedmidubský", email = "vasek7d@gmail.com" }]
 dynamic = ["version"]
