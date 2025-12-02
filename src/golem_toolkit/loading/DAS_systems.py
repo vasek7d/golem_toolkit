@@ -7,47 +7,6 @@ import hashlib, json, tempfile, os, contextlib, re
 
 from golem_toolkit.loading import basic as load
 
-# def load_DAS(shot_no, data_url, das_settings, n_channels, names=None, skiprows=0, time_units="s", verbose=0):
-#     # data_url = f"http://golem.fjfi.cvut.cz/shotdir/{shot_no}/Devices/ITs/SignalLab-a/data.csv"
-    
-    
-    
-#     if names is None:
-#         names = ["t"] + [f"CH{i}" for i in range(1, n_channels+1)]
-
-#     # print("names", names)
-#     pd_data = load.load_array(data_url, names=names,
-#                          index_col='t', verbose=verbose, skiprows=skiprows)
-    
-#     if pd_data is None:
-#         return None
-#     else:
-#         data = pd_data.to_xarray()
-    
-#         DAS = xr.Dataset()
-    
-#         for channel, settings in das_settings.items():
-#             DAS[settings['var_name']] = data.get(
-#                 channel)*settings['scaling_factor']
-#             DAS[settings['var_name']].attrs = settings['attrs']
-#         DAS.attrs = {"shot_no": shot_no}
-    
-#         if time_units == "s":
-#             factor = 1
-#         elif time_units == "ms":
-#             factor = 1e3
-#         else:
-#             raise ValueError("time_units has to be either 's' or 'ms")
-    
-#         DAS.coords["t"] = DAS.t * factor
-#         DAS.t.attrs["units"] = time_units
-    
-#         # # mask = np.isinf(DC['I'].values)
-#         # # t_inf = DC.t.values[mask]
-#         # # print(t_inf)
-#         # # print(DC.sel(t=t_inf))
-#         return DAS
-
 def _fingerprint_for_cache(key: dict) -> str:
     """Stable short fingerprint for any JSON-serializable object."""
     return hashlib.sha1(
