@@ -1,0 +1,24 @@
+# TODO: Add description
+
+min_shot_no: !!int 0
+default_shot_no: !!int 0
+
+min_coil_id: !!int 1
+max_coil_id: !!int 16
+
+# Default parameters for spectrogram
+min_nperseg: !!int 2  # minimum number of points per segment
+nperseg: !!int 256
+min_noverlap: !!int 0  # minimum number of overlapping points
+noverlap: !!int 64
+spect_display_mode: !!int 1
+
+# Default parameters for correlation
+min_t_0: !!float 0.1  #ms
+t_0: !!float 9.5  #ms
+min_l_span: !!float 0.1  #ms
+l_span: !!float 0.3  #ms
+moving_average_window_length: !!int 5  # number of points
+corr_display_mode: !!int 0
+
+2D_display_modes: ["contourf", "pcolormesh"]
