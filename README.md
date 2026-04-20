@@ -15,12 +15,12 @@ This package is not yet available on PyPI or conda-forge. You need to download o
    cd golem_toolkit
    ```
 
-3. **Create a new conda environment** with Python >=3.9:
+3. **(Optional) Create a new conda environment** with Python >=3.9:
    ```bash
    conda create -n golem-toolkit python>=3.9
    ```
 
-4. **Activate the environment**:
+4. **Activate your conda environment**:
    ```bash
    conda activate golem-toolkit
    ```
