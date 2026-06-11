@@ -1,0 +1,44 @@
+flowchart TB
+  subgraph calib [Calibration build once]
+    deskewBNC[scope_current_voltage_deskew Δt]
+    measH["H: FFT CH2/FFT CH1 with Δt in calib ratio"]
+    Yopen[open_fixture_admittance Y_open]
+    Kshunt[shunt_path_correction K]
+    exportNC[active_probe_calib.nc]
+    deskewBNC --> measH --> exportNC
+    Yopen --> exportNC
+    Kshunt --> exportNC
+  end
+
+  subgraph acPath [mode ac at f0]
+    IrawUraw["I_raw CH1, U_raw CH2"]
+    offsets["I_work, U_work"]
+    phU["U_true_phasor = FFT U_work / H"]
+    phI["I_total_phasor = FFT I_work × exp j2πf0Δt × K"]
+    phPar["I_par_phasor = Y_open K U_true_phasor"]
+    phProbe["I_probe_phasor = I_total − I_par"]
+    reconU["U_true: replace_fundamental on U_work/|H|"]
+    reconI["I_total: replace_fundamental on I_work"]
+    sinPar["I_parasitic: f0 sinusoid"]
+    subProbe["I_probe = I_total − I_parasitic"]
+    IrawUraw --> offsets
+    offsets --> phU --> reconU
+    offsets --> phI --> reconI
+    phU --> phPar --> sinPar
+    phI --> phProbe
+    phPar --> phProbe
+    reconI --> subProbe
+    sinPar --> subProbe
+  end
+
+  subgraph dcPath [mode dc]
+    IrawUraw2[I_raw U_raw]
+    static[DC limits from calib]
+    UtrueDC["U_true = U / transfer_dc"]
+    IparDC["I_par = dc_leak_conductance × U_true"]
+    IprobeDC["I_probe = I_total − I_par"]
+    IrawUraw2 --> static --> UtrueDC --> IparDC --> IprobeDC
+  end
+
+  exportNC --> acPath
+  exportNC --> dcPath

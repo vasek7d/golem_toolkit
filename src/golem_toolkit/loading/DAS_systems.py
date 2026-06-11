@@ -300,6 +300,54 @@ class REDPITAYA:
         plot_DAS(self.data, self.DAS_name, **kwargs)
 
 
+_TEK64_ALL_CHANNELS = ["CH1", "CH2", "CH3", "CH4"]
+
+
+def load_tek64_csv(
+    path: str | Path,
+    *,
+    channels: list[str] | None = None,
+    skiprows: int = 12,
+    time_units: str = "s",
+    verbose: int = 0,
+    **load_DAS_kwargs,
+) -> xr.Dataset:
+    """Load a Tektronix MSO64 CSV file into an xarray.Dataset (raw volts, coord ``t``).
+
+    Uses :func:`load_DAS` / :class:`TEK64` conventions (``load_array`` with fixed
+    column names). Default ``skiprows=12`` skips the 11-line Tek metadata block **and**
+    the ``TIME,CH1,...`` header row — same as :attr:`TEK64.skiprows`.
+
+    The file always has four scope channels; all are read, then ``channels`` selects the
+    subset returned (default all four).
+    """
+    path = Path(path)
+    if channels is None:
+        channels = list(_TEK64_ALL_CHANNELS)
+
+    das_settings = {
+        ch: {"var_name": ch, "scaling_factor": 1.0, "attrs": {"units": "V"}}
+        for ch in _TEK64_ALL_CHANNELS
+    }
+    names = ["t"] + _TEK64_ALL_CHANNELS
+    ds = load_DAS(
+        "local",
+        str(path),
+        das_settings,
+        n_channels=4,
+        names=names,
+        skiprows=skiprows,
+        time_units=time_units,
+        verbose=verbose,
+        cache=False,
+        **load_DAS_kwargs,
+    )
+    if ds is None:
+        raise OSError(f"Failed to load Tektronix CSV: {path}")
+    ds.attrs["source_file"] = str(path)
+    return ds[channels]
+
+
 class TEK64:
     def __init__(self, das_settings, DAS_name="TEK64", data_url_template=None):
         self.DAS_name = DAS_name
@@ -320,16 +368,47 @@ class TEK64:
 
     def load_data(self, shot_no, **load_DAS_kwargs):
         data_url = self.get_data_url(shot_no)
-        self.data = load_DAS(shot_no,
-                             data_url,
-                             self.das_settings,
-                             self.n_channels,
-                             skiprows=self.skiprows,
-                             **load_DAS_kwargs)
-        
-    
+        self.data = load_DAS(
+            shot_no,
+            data_url,
+            self.das_settings,
+            self.n_channels,
+            skiprows=self.skiprows,
+            **load_DAS_kwargs,
+        )
 
-        # return self.data
+    def load_from_path(
+        self,
+        path: str | Path,
+        *,
+        shot_no: str | int = "local",
+        channels: list[str] | None = None,
+        skiprows: int | None = None,
+        time_units: str = "s",
+        verbose: int = 0,
+        **load_DAS_kwargs,
+    ) -> xr.Dataset:
+        """Load a local Tektronix CSV with :func:`load_DAS` and this device's ``das_settings``."""
+        path = Path(path)
+        if channels is None:
+            channels = list(self.das_settings.keys())
+        names = ["t"] + list(channels)
+        self.data = load_DAS(
+            shot_no,
+            str(path),
+            self.das_settings,
+            self.n_channels,
+            names=names,
+            skiprows=self.skiprows if skiprows is None else skiprows,
+            time_units=time_units,
+            verbose=verbose,
+            cache=False,
+            **load_DAS_kwargs,
+        )
+        if self.data is None:
+            raise OSError(f"Failed to load Tektronix CSV: {path}")
+        self.data.attrs["source_file"] = str(path)
+        return self.data
 
     def plot(self, **kwargs):
         try:
@@ -544,20 +623,20 @@ if __name__ == "__main__":
     }
 
     
-    calib_shot = 49808  # kolem toho
+    calib_shot = 52261  # kolem toho
     time_units = "ms"
 
-    RP = REDPITAYA(redp_settings)
+    # RP = REDPITAYA(redp_settings)
     TEK = TEK64(tek_settings)
-    PAP = PAPOUCH(papouch_settings)
+    # PAP = PAPOUCH(papouch_settings)
     
 
-    RP.load_data(calib_shot, time_units=time_units, verbose=1)
+    # RP.load_data(calib_shot, time_units=time_units, verbose=1)
     TEK.load_data(calib_shot, time_units=time_units, verbose=1)
-    PAP.load_data(51672, time_units=time_units, verbose=1)
+    # PAP.load_data(51672, time_units=time_units, verbose=1)
 
     # RP.plot()
-    # TEK.plot()
+    TEK.plot()
     # PAP.plot()
     
-    print(PAP.data)
+    # print(PAP.data)
