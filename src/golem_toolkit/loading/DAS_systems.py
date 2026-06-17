@@ -189,7 +189,7 @@ def load_DAS(
 
     return DAS
 
-def plot_DAS(DAS_dataset, DAS_name=None, figsize=None, filename=None):
+def plot_DAS(DAS_dataset, DAS_name=None, figsize=None, filename=None, show=True):
     if DAS_dataset is None:
         raise ValueError("DAS_dataset is None.")
 
@@ -261,7 +261,10 @@ def plot_DAS(DAS_dataset, DAS_name=None, figsize=None, filename=None):
     if filename:
         fig.savefig(filename)
 
-    plt.show()
+    if show:
+        plt.show()
+    else:
+        plt.close(fig)
 
 class REDPITAYA:
     def __init__(self, das_settings, DAS_name="REDPITAYA", data_url_template=None):

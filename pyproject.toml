@@ -39,3 +39,10 @@ source = "vcs"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/golem_toolkit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+markers = [
+    "network: tests that require an internet connection",
+]
