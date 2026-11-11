@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import numpy as np
+import scipy.signal as sig
 import xarray as xr
 
 
@@ -56,3 +57,21 @@ def replace_fundamental(
     fund_raw = sinusoid_from_complex(time_s, f0_hz, c_raw)
     fund_target = sinusoid_from_complex(time_s, f0_hz, target_phasor)
     return signal - fund_raw + fund_target
+
+
+def lowpass(
+    x: np.ndarray,
+    fs_hz: float,
+    cutoff_hz: float,
+    *,
+    order: int = 4,
+) -> np.ndarray:
+    """Zero-phase Butterworth low-pass (``filtfilt``). Returns a copy if filtering is not possible."""
+    if len(x) < 2 * order + 1:
+        return x.copy()
+    nyquist = 0.5 * fs_hz
+    if cutoff_hz <= 0.0 or cutoff_hz >= nyquist:
+        return x.copy()
+    wn = cutoff_hz / nyquist
+    b, a = sig.butter(order, wn, btype="low")
+    return sig.filtfilt(b, a, x)

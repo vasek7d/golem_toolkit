@@ -176,6 +176,9 @@ cython_debug/
 # Local shell dumps
 _Empty_Source_Shells/
 
+# Local release notes/manuals (keep untracked)
+RELEASE_MANUAL.local.md
+
 # Ruff stuff:
 .ruff_cache/
 
